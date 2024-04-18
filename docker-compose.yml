@@ -1,0 +1,83 @@
+services:
+  ProductOwner.Microservice:
+   image: ${DOCKER_REGISTRY-}ownerservice
+   build:
+    context: ./ProductOwner.Microservice
+    dockerfile: Dockerfile
+   environment: 
+    ASPNETCORE_ENVIRONMENT: "Development"
+    ASPNETCORE_URLS: "http://+:80"  
+    CONNECTIONSTRINGS:DEFAULTCONNECTION: "Server=mssql;Database=ProductOwnerServiceDB;User Id=sa;Password=SqlPassword#1234;Trusted_Connection=False;MultipleActiveResultSets=true; TrustServerCertificate=true"
+    RABBIT_MQ_SERVER: rabbitmq
+    RABBIT_MQ_USERNAME: guest
+    RABBIT_MQ_PASSWORD: guest
+    RABBITMQSETTINGS:EXCHANGENAME: OfferExchange
+    RABBITMQSETTINGS:EXCHHANGETYPE: direct
+    RABBITMQSETTINGS:QUEUENAME: offer_queue
+    RABBITMQSETTINGS:ROUTEKEY: offer_route- 
+   ports:
+    - "8080:80"
+   depends_on:
+    mssql:
+      condition: service_started
+    rabbitmq:
+      condition: service_healthy
+
+  ProductUser.Microservice:
+   image: ${DOCKER_REGISTRY-}userservice
+   build:
+    context: ./ProductUser.Microservice
+    dockerfile: Dockerfile
+   environment:
+    ASPNETCORE_ENVIRONMENT: "Development"
+    ASPNETCORE_URLS: "http://+:80"  
+    CONNECTIONSTRINGS:DEFAULTCONNECTION: "Server=mssql;Database=ProductUserServiceDB;User Id=sa;Password=SqlPassword#1234;Trusted_Connection=False;MultipleActiveResultSets=true; TrustServerCertificate=true"
+    RABBIT_MQ_SERVER: rabbitmq
+    RABBIT_MQ_USERNAME: guest
+    RABBIT_MQ_PASSWORD: guest
+    RABBITMQSETTINGS:EXCHANGENAME: OfferExchange
+    RABBITMQSETTINGS:EXCHHANGETYPE: direct
+    RABBITMQSETTINGS:QUEUENAME: offer_queue
+    RABBITMQSETTINGS:ROUTEKEY: offer_route
+   ports:
+    - "8090:80"
+   depends_on:
+    mssql:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:latest
+    container_name: rabbit-demo-mssql
+    volumes:
+        - ./.containers/database:/var/opt/mssql/data
+    user: root
+    ports:
+      - "11433:1433"
+    environment:
+      MSSQL_SA_PASSWORD: "SqlPassword#1234"
+      ACCEPT_EULA: "Y"
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-Usa", "-PSqlPassword#1234", "-Q", "select 1"]
+      interval: 1s
+      retries: 20
+   
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: product-offer-mq
+    volumes:
+        - ./.containers/queue/data/:/var/lib/rabbitmq
+        - ./.containers/queue/log/:/var/log/rabbitmq
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+        RABBITMQ_DEFAULT_USER: guest
+        RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 1s
+      retries: 20
+  
